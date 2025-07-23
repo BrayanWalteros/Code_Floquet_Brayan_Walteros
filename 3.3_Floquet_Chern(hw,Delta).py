@@ -3,8 +3,6 @@ from matplotlib import pyplot as plt
 import matplotlib.pyplot as plt
 from numba import njit, prange
 
-
-
 # Matrices de Pauli 
 sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
 sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
