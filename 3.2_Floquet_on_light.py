@@ -107,16 +107,8 @@ def imagen(hw):
         H121 = np.conj(H112)
         H1 = np.array([[H111, H112],[H121, H122]], dtype=np.complex128)
 
-        H211 = 0
-        H222 = 0
-        H212 = factor**2 * 2 * gamma_II * img * eta
-        H221 = np.conj(H212)
-        H2 = np.array([[H211, H212],[H221, H222]], dtype=np.complex128)
-
         H_plus_1 = H1
         H_minus_1= np.conjugate(np.transpose(H_plus_1))
-        H_plus_2 = H2
-        H_minus_2= np.conjugate(np.transpose(H_plus_2))
 
         Basis = np.arange(-Nbasis, Nbasis + 1, dtype=np.int32)
         HF = np.zeros((2 * Basis.size, 2 * Basis.size), dtype=np.complex128)
@@ -125,9 +117,6 @@ def imagen(hw):
         for ii in range(Basis.size - 1):
             HF[2*ii:2*ii+2, 2*(ii+1):2*(ii+1)+2] = H_minus_1  # H_{-1}
             HF[2*(ii+1):2*(ii+1)+2, 2*ii:2*ii+2] = H_plus_1   # H_{1}
-        for ii in range(Basis.size - 2):
-            HF[2*ii:2*ii+2, 2*(ii+2):2*(ii+2)+2] = H_minus_2  # H_{-2}
-            HF[2*(ii+2):2*(ii+2)+2, 2*ii:2*ii+2] = H_plus_2   # H_{2}
 
         return HF
 
