@@ -32,10 +32,10 @@ MM    = (b/2)*np.array([1,0],dtype=np.float64)-K_BZ
 L     = (np.pi/(5*a))*np.array([-1,-1],dtype=np.float64)
 OO    = KK + L
 
-gamma2 = 2.22        # MoS2: vel fermi upper [v_u=hbar.v_Fu] (eV.Å)
-epsilon2 = 2.07              # masa upper (eV)
-gamma1 = 2.59        # WS2:  vel fermi lower [v_l=hbar.v_Fl] (eV.Å)
-epsilon1 = 2.03              # masa lower (eV)                    
+gamma2 = 2.22        # MoS2: vel fermi upper [v_l=hbar.v_Fl] (eV.Å)
+epsilon2 = 2.07              # masa lower (eV)
+gamma1 = 2.59        # WS2:  vel fermi lower [v_u=hbar.v_Fu] (eV.Å)
+epsilon1 = 2.03              # masa upper (eV)                    
 epsilon0 = 0
 Tplus0plus0  = 0.0067   # (eV)
 Tminus2plus0 = 0.0033   # (eV)
@@ -59,7 +59,7 @@ def canales(varphi,Delta,config):
             return [0, 0, 0.5*(-np.conj(t_cc)*gamma1*(Delta-2*epsilon1)/(epsilon1*(Delta-epsilon1))+np.conj(t_vv)*gamma2*(Delta-2*epsilon2)/(epsilon2*(Delta-epsilon2))), 0, 0], 1
         elif config == 2:
             t_vc = 3*Tminus2plus0
-            return [np.conj(t_vc), 0, 0,(np.conj(t_vc)/2)*(abs(gamma2)**2/(epsilon2 * (Delta - epsilon2))+ abs(gamma1)**2 / (epsilon1 * (Delta - epsilon1))), 0], 2
+            return [np.conj(t_vc), 0, 0,(np.conj(t_vc)/2)*(abs(gamma2)**2/(epsilon2**2)+ abs(gamma1)**2 / (epsilon1**2)), 0], 2
         elif config== 3:
             t_cv = 3*Tplus0plus2
             return [0, 0, 0, 0, (gamma1*gamma2*np.conj(t_cv)/2)*((Delta * (epsilon1 + epsilon2) - 2 * epsilon1 * epsilon2)/(epsilon1 * epsilon2 * (Delta - epsilon1) * (Delta - epsilon2)))], 3
@@ -74,8 +74,15 @@ def canales(varphi,Delta,config):
         elif config == 3:
             t_cv = 3*Tplus0plus2
             t_vc = 3*Tminus2plus0
-            return [np.conj(t_vc), 0, 0, 0.5*gamma1*gamma2*np.conj(t_cv)*((Delta*(epsilon1+epsilon2)-2*epsilon1*epsilon2)/(epsilon1*epsilon2*(Delta-epsilon1)*(Delta-epsilon2))), 0], 6 
+            return [np.conj(t_vc), 0, 0, gamma1*gamma2*np.conj(t_cv)/(epsilon1*epsilon2), 0], 6 
 
+def BZ_TB(N):
+        vx, vy = np.array([-2*L[0],0],dtype=np.float64)/N, np.array([0,-2*L[0]],dtype=np.float64)/N
+        BZ = np.zeros((N,N,2),dtype=np.float64)
+        for jy in range(N):
+            for jx in range(N):
+                BZ[jx, jy] = OO + vx * jx + vy * jy
+        return BZ
 # BZ discreta
 def imagen(Delta,varphi,config):
     # ---------------------------------------------------
@@ -119,43 +126,12 @@ def imagen(Delta,varphi,config):
         return HF
 
 
-    # Fronteras
-    Q_kp = np.pi / (5 *a)
-    Q_max = (2 * np.pi) / (3 * a)
-
-
-    # --------------------- Parámetros ------------------
-    # Discretizacion de BZ
-    NBZ = 200       
-    # Tamaño de matriz de Floquet
-    Nbasis = 0
-    # Verifica Nbasis y define bandas según su valor
-    if Nbasis == 1:
-        bands = ['v₀','v₊₁','c₋₁','c₀']
-    elif Nbasis == 0:
-        bands = ['v₀','c₀']
-    else:
-        raise ValueError("Nbasis debe ser 0 o 1")
-    hw = 1      
-    # Polarizacion (1:right, -1:left)
-    eta = 1
-    # Potencial vector: aA = (0,0.1,0.25)
-    aA = 0.0
-    A0 = aA * h_bar/(a*e)
+    
     # ---------------------------------------------------  
     # ---------------------------------------------------  
     canal, apilamiento = canales(varphi,Delta,config)[0], canales(varphi,Delta,config)[1]
     t0, gamma_plus, gamma_minus, gamma_I, gamma_II = canal
 
-
-
-    def BZ_TB(N):
-        vx, vy = np.array([-2*L[0],0],dtype=np.float64)/N, np.array([0,-2*L[0]],dtype=np.float64)/N
-        BZ = np.zeros((N,N,2),dtype=np.float64)
-        for jy in range(N):
-            for jx in range(N):
-                BZ[jx, jy] = OO + vx * jx + vy * jy
-        return BZ
 
     def compute_U_F(BZ, Parr, mitad):
         N = BZ.shape[0]
@@ -273,11 +249,32 @@ def imagen(Delta,varphi,config):
     plt.savefig(f"berry_curvature_Delta_{Delta:.3f}_apilamiento_{apilamiento}.png")
     plt.close()
 
+# --------------------- Parámetros ------------------
+# Discretizacion de BZ
+NBZ = 200       
+# Tamaño de matriz de Floquet
+Nbasis = 0
+# Verifica Nbasis y define bandas según su valor
+if Nbasis == 1:
+    bands = ['v₀','v₊₁','c₋₁','c₀']
+elif Nbasis == 0:
+    bands = ['v₀','c₀']
+else:
+    raise ValueError("Nbasis debe ser 0 o 1")
+hw = 1      
+# Polarizacion (1:right, -1:left)
+eta = 1
+# Campo electrico E_0
+E_0 = 0.01 # V/A 
+# Potencial vector:
+alfa = (a*e*E_0)/(hw)
+A0 = alfa * h_bar/(a*e)
 # Energia de fotones en eV
-Delta_values = np.linspace(-0.001, -2.2399, 200)
+Delta_values = np.linspace(-0.001, -2.2, 200)
 for Delta in Delta_values:
     print(f"Δ ={Delta:.2f} eV")
-    imagen(Delta,-1,2)
+    imagen(Delta,-1,3)
+
 
 
     
