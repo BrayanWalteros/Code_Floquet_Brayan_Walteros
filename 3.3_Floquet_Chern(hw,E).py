@@ -3,6 +3,8 @@ from matplotlib import pyplot as plt
 import matplotlib.pyplot as plt
 from numba import njit, prange
 
+
+
 # Matrices de Pauli 
 sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
 sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
@@ -59,7 +61,7 @@ def canales(varphi,Delta,config):
             return [0, 0, 0.5*(-np.conj(t_cc)*gamma1*(Delta-2*epsilon1)/(epsilon1*(Delta-epsilon1))+np.conj(t_vv)*gamma2*(Delta-2*epsilon2)/(epsilon2*(Delta-epsilon2))), 0, 0], 1
         elif config == 2:
             t_vc = 3*Tminus2plus0
-            return [np.conj(t_vc), 0, 0,(np.conj(t_vc)/2)*(abs(gamma2)**2/(epsilon2 * (Delta - epsilon2))+ abs(gamma1)**2 / (epsilon1 * (Delta - epsilon1))), 0], 2
+            return [np.conj(t_vc), 0, 0,(np.conj(t_vc)/2)*(abs(gamma2)**2/(epsilon2**2)+ abs(gamma1)**2 / (epsilon1**2)), 0], 2
         elif config== 3:
             t_cv = 3*Tplus0plus2
             return [0, 0, 0, 0, (gamma1*gamma2*np.conj(t_cv)/2)*((Delta * (epsilon1 + epsilon2) - 2 * epsilon1 * epsilon2)/(epsilon1 * epsilon2 * (Delta - epsilon1) * (Delta - epsilon2)))], 3
@@ -74,7 +76,7 @@ def canales(varphi,Delta,config):
         elif config == 3:
             t_cv = 3*Tplus0plus2
             t_vc = 3*Tminus2plus0
-            return [np.conj(t_vc), 0, 0, 0.5*gamma1*gamma2*np.conj(t_cv)*((Delta*(epsilon1+epsilon2)-2*epsilon1*epsilon2)/(epsilon1*epsilon2*(Delta-epsilon1)*(Delta-epsilon2))), 0], 6 
+            return [np.conj(t_vc), 0, 0, gamma1*gamma2*np.conj(t_cv)/(epsilon1*epsilon2), 0], 6 
 
 @njit(parallel=True)
 def BZ_TB(N):
@@ -87,10 +89,12 @@ def BZ_TB(N):
     return BZ
     
 # BZ discreta
-def imagen(hw,aA,varphi,config):
+def imagen(E_0, hw, Delta):
     # ---------------------------------------------------
     # Hamiltoniano de Floquet
-    A0 = aA * h_bar/(a*e)
+    alfa = (a*e*E_0)/(hw)
+    A0 = alfa * h_bar/(a*e)
+
     def hamiltonian(x,y,hw,Delta,A0,eta):
         q_plus, q_minus = x+img*y, x-img*y
         q_plus_eta, q_minus_eta = x+eta*img*y, x-eta*img*y
@@ -206,48 +210,63 @@ elif Nbasis == 0:
     bands = ['v₀','c₀']
 else:
     raise ValueError("Nbasis debe ser 0 o 1")
-Delta = 1.45   # eV
+# Gap entre cond_lower y val_upper (eV)
+Delta_g = 1.45    
 # Polarizacion (1:right, -1:left)
 eta = 1
+# Campo electrico E_0
+d = 6.516 # A
+ 
 # ---------------------------------------------------  
 BZ = BZ_TB(NBZ)  
 size_F = 2 * (2 * Nbasis + 1)
-half   = size_F // 2  # número de bandas de valencia/conducción  
-# Fronteras
-Q_kp = np.pi / (5 *a)
-Q_max = (2 * np.pi) / (3 * a)
-# ---------------------------------------------------
-varphi = 1
-config = 3
-canal, apilamiento = canales(varphi,Delta,config)[0], canales(varphi,Delta,config)[1]
-t0, gamma_plus, gamma_minus, gamma_I, gamma_II = canal
+half   = size_F // 2  # número de bandas de valencia/conducción   
 
-# --- Parámetros para el mapa de calor ---
-hw_values = np.linspace(0.5, 3.1, 50)
-aA_values = np.linspace(0.05, 0.25, 50)
-banda_objetivo = "v₀"  # Cambia aquí la banda que quieras graficar (ej: "v₀", "c₀", "v₊₁", "c₋₁")
-chern_map = np.zeros((len(hw_values), len(aA_values)))
-for ix, aA in enumerate(aA_values):
-    for iy, hw in enumerate(hw_values):
-        chern_vals = imagen(hw, aA, varphi, config)
-        # Encuentra el índice de la banda objetivo
+varphi = 1
+config = 1
+
+
+hw_values = np.linspace(0.5, 1.79, 30)         # Puedes ajustar la resolución
+E_0_values = np.linspace(0.001, 0.01, 20)
+banda_objetivo = "v₊₁"  # Cambia aquí la banda que quieras graficar (ej: "v₀", "c₀", "v₊₁", "c₋₁")
+chern_map = np.zeros((len(E_0_values), len(hw_values)))
+
+total_iteraciones = len(hw_values) * len(E_0_values)
+contador = 0
+for iy, E_0 in enumerate(E_0_values):
+    for ix, hw in enumerate(hw_values):
+        U = E_0 * d
+        Delta = Delta_g - U   
+        canal, apilamiento = canales(varphi, Delta, config)
+        t0, gamma_plus, gamma_minus, gamma_I, gamma_II = canal
+        chern_vals = imagen(E_0, hw, Delta)
+        
+        # Definir el orden de bandas según Nbasis
         if Nbasis == 1:
             bandas = ['v₀', 'v₊₁', 'c₋₁', 'c₀']
         elif Nbasis == 0:
             bandas = ['v₀', 'c₀']
         ind = bandas.index(banda_objetivo)
-        chern_map[iy, ix] = chern_vals[ind]  # Ojo: iy=filas, ix=columnas
-        print(f'apilamiento = {apilamiento:.0f}, aA = {aA:.2f}, ℏω = {hw:.2f} eV, {aA*100/0.25:.2f}%')
+        chern_map[iy, ix] = chern_vals[ind]
+        contador += 1
+        progreso = 100 * contador / total_iteraciones
+        print(f'Progreso global: {progreso:.2f}% | apilamiento = {apilamiento}, ℏω = {hw:.2f} eV, E₀ = {E_0:.3f}')
 
+# --- Gráfica final ---
 plt.figure(figsize=(8, 6))
-extent = [aA_values[0], aA_values[-1], hw_values[0], hw_values[-1]]
-plt.imshow(chern_map, aspect='auto', origin='lower', extent=extent, cmap='RdBu_r')
-plt.xlabel(r'$aA$')
-plt.ylabel(r'$\hbar\omega$ [eV]')
-plt.title(f'Mapa de números de Chern para banda {banda_objetivo}')
-plt.colorbar(label='Chern')
-plt.savefig(f"chern_hw_vs_aA. apilamiento:{apilamiento:.0f}_banda: {banda_objetivo}.png", dpi=300)
+extent = [hw_values[0], hw_values[-1], E_0_values[0], E_0_values[-1]]
+im = plt.imshow(chern_map, aspect='auto', origin='lower', extent=extent,
+                cmap='RdBu_r', vmin=-2, vmax=2)
+plt.xlabel(r'$\hbar\omega$ [eV]')
+plt.ylabel(r'$E_0$ [V/Å]')
+plt.title(f'Número de Chern | Banda: {banda_objetivo} | Apilamiento: {apilamiento}')
+cbar = plt.colorbar(im, label='Chern')
+# Etiquetas solo enteros en barra de color
+cbar.set_ticks(np.arange(-2, 3, 1))
+fname = f"mapa_chern_apil{apilamiento}_banda_{banda_objetivo}.png"
 plt.tight_layout()
-plt.show()
+plt.savefig(f"mapa_colores_apilamiento_{apilamiento}.png")
+plt.close()
+    
 
     
