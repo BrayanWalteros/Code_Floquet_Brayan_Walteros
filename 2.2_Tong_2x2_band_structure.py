@@ -9,7 +9,7 @@ def Rot(th):
     return RR
 
 # Bicapa
-a = 1                   # (Å)
+a = 3.15                 # (Å)
 a_0 = a / np.sqrt(3)
 b = (4*np.pi)/(np.sqrt(3.0)*a)
 a1 = a*np.array([0.5*np.sqrt(3.0), 0.5])
@@ -22,20 +22,22 @@ Gamma = np.array([0.0,0.0],dtype=np.float64)-K_BZ
 KK    = (b/np.sqrt(3.0))*np.array([0.5*np.sqrt(3.0),-0.5],dtype=np.float64)-K_BZ
 KP    = (b/np.sqrt(3.0))*np.array([0.5*np.sqrt(3.0),0.5],dtype=np.float64)-K_BZ
 MM    = (b/2)*np.array([1,0],dtype=np.float64)-K_BZ
-L     = (np.pi/(5*a))*np.array([-1,-1],dtype=np.float64)
+Q_kp = np.pi / (5)
+L     = Q_kp*np.array([-1,-1],dtype=np.float64)
 OO    = KK + L
                                   
 epsilon = int(input("\nStacking:\n +1. R-stacking\n -1. H-stacking\n Ingrese el número de stacking: "))             
-v_u = 2.22        # MoS2: vel fermi upper [v_u=hbar.v_Fu] (eV.Å)
-M_u = 2.07              # masa upper (eV)
-v_l = 2.59        # WS2:  vel fermi lower [v_l=hbar.v_Fl] (eV.Å)
-M_l = 2.03              # masa lower (eV)
+v_u = 2.59       # WS2:  vel fermi upper [v_l=hbar.v_Fl] (eV.Å)
+M_u = 2.03            # masa upper (eV)   
+v_l = 2.22       # MoS2: vel fermi lower [v_u=hbar.v_Fu] (eV.Å)
+M_l = 2.07            # masa lower (eV)  
 Tplus0plus0  = 0.0067   # (eV)
 Tminus2plus0 = 0.0033   # (eV)
 Tplus0plus2  = 0.0033   # (eV)
 Tminus2plus2 = 0.0100   # (eV)
-B = (v_u**2/M_u) + (v_l**2/M_l)
-D = (v_u**2/M_u) - (v_l**2/M_l)
+Tplus2plus2 = 0.0100    # (eV)
+B = (v_l**2/M_l) + (v_u**2/M_u)
+D = (v_l**2/M_l) - (v_u**2/M_u)
 
 # Canales t
 def canales(epsilon):
@@ -43,7 +45,7 @@ def canales(epsilon):
         stacking = "R"
         configuracion = int(input("\nElegiste R-stacking. Elige una configuración:\n 1. MM \n 2. MX \n 3. XM \nIngrese el número: "))             
         if configuracion == 1:
-            return [3*Tplus0plus0, 3*Tminus2plus2, 0, 0, "M", "M", stacking], 1
+            return [3*Tplus0plus0, 3*Tplus2plus2, 0, 0, "M", "M", stacking], 1
         elif configuracion == 2:
             return [0, 0, 0, 3*Tminus2plus0, "M", "X", stacking], 2
         elif configuracion == 3:
@@ -58,19 +60,16 @@ def canales(epsilon):
         elif configuracion == 3:
             return [0, 0, 3*Tplus0plus2, 3*Tminus2plus0, "X", "X", stacking], 6
 
-
+# Canales de acoplamiento
 canales = canales(epsilon)
 canal, apilamiento= canales[0], canales[1]
 t_cc, t_vv, t_cv, t_vc, stacking_upper, stacking_lower, stacking = canal
-
 t1 = t_vc
 t2 = (v_l / M_l) * t_vv
 t3 = -(v_u / M_u) * t_cc
 t4 = ((v_l * v_u) / (M_l * M_u)) * t_cv
 
-# Fronteras
-Q_kp = np.pi / (5 *a)
-Q_max = (2 * np.pi) / (3 * a)
+# Criterio de Delta
 if apilamiento == 1:
     t = t2+t3
     A_coeff = B
@@ -103,23 +102,22 @@ elif apilamiento == 6:
     C_coeff = B * t**2 * Q_kp**2
 # Soluciones de la cuadrática
 discriminante = B_coeff**2 - 4 * A_coeff * C_coeff
-
 if discriminante >= 0:
     delta1 = (-B_coeff + np.sqrt(discriminante)) / (2 * A_coeff)
     delta2 = (-B_coeff - np.sqrt(discriminante)) / (2 * A_coeff)
     soluciones = [delta1, delta2]
-    Delta_kp = min(delta1,delta2)
+    Delta_kp = min(delta1,delta2)/a**2
 
-# Parámetros          
+# Solucion Delta          
 puntos = 3000
-f_delta = 0.50
-Delta = f_delta * Delta_kp
+f_delta = 0.5
+Delta = f_delta*Delta_kp
 Q = Q_kp
 kmin, kmax = -Q, Q    
 
 # Hamilton tipo Dirac 2x2
 def hamilton2x2(x,y):
-    q_x, q_y = (x,y)
+    q_x, q_y = (x/a,y/a)
     q_plus, q_minus, qcuadrado= q_x + 1j * q_y, q_x - 1j * q_y, q_x**2 + q_y**2
     q_plus_epsilon, q_minus_epsilon = (q_plus, q_minus) if epsilon == +1 else (q_minus, q_plus)
     HH=np.zeros((2,2),dtype=np.complex128)
@@ -157,7 +155,7 @@ ax.plot(kx_values, Enarr[1]*1000, 'b-', markersize=1)
 # Personalizar gráfica
 ax.set_xlabel('$aq_x$')
 ax.set_ylabel('Energía (meV)')
-ax.set_title(f'Espectro de Energías (Δ = {Delta:.2f} eV)')
+ax.set_title(f'Espectro de Energías (Δ = {Delta*1000:.2f} meV)')
 ax.set_xlim(kmin, kmax)
 
 # Guardar figura
