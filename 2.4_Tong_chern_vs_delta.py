@@ -12,7 +12,7 @@ def Rot(th):
 
 @numba.njit
 def hamilton2x2(x, y, Delta, B, D, epsilon, t1, t2, t3, t4):
-    q_x, q_y = (x,y)
+    q_x, q_y = (x/a,y/a)
     q_plus, q_minus, qcuadrado= q_x + 1j * q_y, q_x - 1j * q_y, q_x**2 + q_y**2
     q_plus_epsilon, q_minus_epsilon = (q_plus, q_minus) if epsilon == +1 else (q_minus, q_plus)
     HH=np.zeros((2,2),dtype=np.complex128)
@@ -90,11 +90,9 @@ def compute_U_F(BZ, Parr, mitad):
     return Uarr, Farr
 
 # ---------------------------------------------------
-# PARTE PRINCIPAL
-# ---------------------------------------------------
-
-# Bicapa
-a = 1                   # (Å)
+# --- Constantes y parámetros ---
+img = complex(0.0,1.0)
+a = 3.15                 # (Å)
 a_0 = a / np.sqrt(3)
 b = (4*np.pi)/(np.sqrt(3.0)*a)
 a1 = a*np.array([0.5*np.sqrt(3.0), 0.5])
@@ -107,136 +105,114 @@ Gamma = np.array([0.0,0.0],dtype=np.float64)-K_BZ
 KK    = (b/np.sqrt(3.0))*np.array([0.5*np.sqrt(3.0),-0.5],dtype=np.float64)-K_BZ
 KP    = (b/np.sqrt(3.0))*np.array([0.5*np.sqrt(3.0),0.5],dtype=np.float64)-K_BZ
 MM    = (b/2)*np.array([1,0],dtype=np.float64)-K_BZ
-L     = (np.pi/(5*a))*np.array([-1,-1],dtype=np.float64)
+Q_kp = np.pi / (5)
+L     = Q_kp*np.array([-1,-1],dtype=np.float64)
 OO    = KK + L
 
-epsilon = int(input("\nStacking:\n +1. R-stacking\n -1. H-stacking\n Ingrese el número de stacking: "))             
-v_u = 2.22        # MoS2: vel fermi upper [v_u=hbar.v_Fu] (eV.Å)
-M_u = 2.07              # masa upper (eV)
-v_l = 2.59        # WS2:  vel fermi lower [v_l=hbar.v_Fl] (eV.Å)
-M_l = 2.03              # masa lower (eV)
-Tplus0plus0  = 0.0067   # (eV)
-Tminus2plus0 = 0.0033   # (eV)
-Tplus0plus2  = 0.0033   # (eV)
-Tminus2plus2 = 0.0100   # (eV)
-B = (v_u**2/M_u) + (v_l**2/M_l)
-D = (v_u**2/M_u) - (v_l**2/M_l)
+v_u = 2.59; M_u = 2.03
+v_l = 2.22; M_l = 2.07
+Tplus0plus0  = 0.0067; Tminus2plus0 = 0.0033; Tplus0plus2 = 0.0033
+Tminus2plus2 = 0.0100; Tplus2plus2 = 0.0100
+B = (v_l**2/M_l) + (v_u**2/M_u)
+D = (v_l**2/M_l) - (v_u**2/M_u)
 
-# Canales t
-def canales(epsilon):
-    if epsilon == +1:
-        stacking = "R"
-        configuracion = int(input("\nElegiste R-stacking. Elige una configuración:\n 1. MM \n 2. MX \n 3. XM \nIngrese el número: "))             
-        if configuracion == 1:
-            return [3*Tplus0plus0, 3*Tminus2plus2, 0, 0, "M", "M", stacking], 1
-        elif configuracion == 2:
-            return [0, 0, 0, 3*Tminus2plus0, "M", "X", stacking], 2
-        elif configuracion == 3:
-            return [0, 0, 3*Tplus0plus2, 0, "X", "M", stacking], 3
-    elif epsilon == -1:
-        stacking = "H"
-        configuracion = int(input("\nElegiste H-stacking. Elige una configuración:\n 1. MX \n 2. MM \n 3. XX \nIngrese el número: "))             
-        if configuracion == 1:           
-            return [0, 3*Tminus2plus2, 0, 0, "M", "X", stacking], 4
-        elif configuracion == 2:           
-            return [3*Tplus0plus0, 0, 0, 0, "M", "M", stacking], 5
-        elif configuracion == 3:
-            return [0, 0, 3*Tplus0plus2, 3*Tminus2plus0, "X", "X", stacking], 6
+def canales_por_apilamiento(idx):
+    # idx de 1 a 6
+    # Devuelve t_cc, t_vv, t_cv, t_vc, stacking_upper, stacking_lower, stacking_str
+    if idx == 1:
+        return [3*Tplus0plus0, 3*Tminus2plus2, 0, 0, "M", "M", r"$R^{M}_{M}$"]
+    elif idx == 2:
+        return [0, 0, 0, 3*Tminus2plus0, "M", "X", r"$R^{M}_{X}$"]
+    elif idx == 3:
+        return [0, 0, 3*Tplus0plus2, 0, "X", "M", r"$R^{X}_{M}$"]
+    elif idx == 4:
+        return [0, 3*Tminus2plus2, 0, 0, "M", "X", r"$H^{M}_{X}$"]
+    elif idx == 5:
+        return [3*Tplus0plus0, 0, 0, 0, "M", "M", r"$H^{M}_{M}$"]
+    elif idx == 6:
+        return [0, 0, 3*Tplus0plus2, 3*Tminus2plus0, "X", "X", r"$H^{X}_{X}$"]
 
-canales = canales(epsilon)
-canal, apilamiento= canales[0], canales[1]
-t_cc, t_vv, t_cv, t_vc, stacking_upper, stacking_lower, stacking = canal
-t1 = t_vc
-t2 = (v_l / M_l) * t_vv
-t3 = -(v_u / M_u) * t_cc
-t4 = ((v_l * v_u) / (M_l * M_u)) * t_cv
-
-# Fronteras
-Q_kp = np.pi / (5 *a)
-Q_max = (2 * np.pi) / (3 * a)
-if apilamiento == 1:
-    t = t2+t3
-    A_coeff = B
-    B_coeff = t**2 + B**2 * Q_kp**2
-    C_coeff = B * t**2 * Q_kp**2
-elif apilamiento == 2:
-    t = 0
-    A_coeff = B
-    B_coeff = t**2 + B**2 * Q_kp**2
-    C_coeff = B * t**2 * Q_kp**2
-elif apilamiento == 3:
-    t = t4
-    A_coeff = 1
-    B_coeff = - B * Q_kp**2
-    C_coeff = - (8*t**2+2*B**2)*Q_kp**4
-elif apilamiento == 4:           
-    t = t2
-    A_coeff = B
-    B_coeff = t**2 + B**2 * Q_kp**2
-    C_coeff = B * t**2 * Q_kp**2
-elif apilamiento == 5:           
-    t = t3
-    A_coeff = B
-    B_coeff = t**2 + B**2 * Q_kp**2
-    C_coeff = B * t**2 * Q_kp**2
-elif apilamiento == 6:
-    t = 0
-    A_coeff = B
-    B_coeff = t**2 + B**2 * Q_kp**2
-    C_coeff = B * t**2 * Q_kp**2
-# Soluciones de la cuadrática
-discriminante = B_coeff**2 - 4 * A_coeff * C_coeff
-
-if discriminante >= 0:
-    delta1 = (-B_coeff + np.sqrt(discriminante)) / (2 * A_coeff)
-    delta2 = (-B_coeff - np.sqrt(discriminante)) / (2 * A_coeff)
-    soluciones = [delta1, delta2]
-    Delta_kp = min(delta1,delta2)
-
-# mesh y barrido en Delta
+# Prepara parámetros comunes
 NBZ = 100
-f_delta = 0.95
-Delta_max = f_delta * Delta_kp
-Delta_values = np.linspace(0, Delta_max, 500)
-chern_convergence = {'conduction': [], 'valence': []}
-
-# construir BZ una sola vez
 BZ = build_BZ(b1, b2, NBZ)
+Delta_vals_por_apilamiento = []
+chern_valencia_por_apilamiento = []
+leyendas = []
 
-for Delta in Delta_values:
-    # calcular todos los autovalores y vectores propios
-    Earr, Parr = compute_eigens(BZ, KK, Delta, B, D, epsilon, t1, t2, t3, t4)
+for apilamiento in range(1,7):
+    t_cc, t_vv, t_cv, t_vc, stacking_upper, stacking_lower, stacking_str = canales_por_apilamiento(apilamiento)
+    t1 = t_vc
+    t2 = (v_l / M_l) * t_vv
+    t3 = -(v_u / M_u) * t_cc
+    t4 = ((v_l * v_u) / (M_l * M_u)) * t_cv
+    # Criterio para Delta_kp
+    if apilamiento == 1:
+        t = t2+t3; A_coeff = B
+        B_coeff = t**2 + B**2 * Q_kp**2
+        C_coeff = B * t**2 * Q_kp**2
+    elif apilamiento == 2:
+        t = 0; A_coeff = B
+        B_coeff = t**2 + B**2 * Q_kp**2
+        C_coeff = B * t**2 * Q_kp**2
+    elif apilamiento == 3:
+        t = t4; A_coeff = 1
+        B_coeff = - B * Q_kp**2
+        C_coeff = - (8*t**2+2*B**2)*Q_kp**4
+    elif apilamiento == 4:
+        t = t2; A_coeff = B
+        B_coeff = t**2 + B**2 * Q_kp**2
+        C_coeff = B * t**2 * Q_kp**2
+    elif apilamiento == 5:
+        t = t3; A_coeff = B
+        B_coeff = t**2 + B**2 * Q_kp**2
+        C_coeff = B * t**2 * Q_kp**2
+    elif apilamiento == 6:
+        t = 0; A_coeff = B
+        B_coeff = t**2 + B**2 * Q_kp**2
+        C_coeff = B * t**2 * Q_kp**2
+    # Solución cuadrática
+    discriminante = B_coeff**2 - 4 * A_coeff * C_coeff
+    if discriminante >= 0:
+        delta1 = (-B_coeff + np.sqrt(discriminante)) / (2 * A_coeff)
+        delta2 = (-B_coeff - np.sqrt(discriminante)) / (2 * A_coeff)
+        Delta_kp = min(delta1,delta2)/a**2
+    else:
+        Delta_kp = 0.1 # valor por defecto seguro
+    
+    f_delta = 0.9
+    Delta_max = f_delta * Delta_kp
+    Delta_values = np.linspace(0, Delta_max, 80)
+    chern_val = []
 
-    # calcular conexiones de enlace y curvatura
-    mitad = 1  # ya que dim=2, mitad=1
-    Uarr, Farr = compute_U_F(BZ, Parr, mitad)
+    for Delta in Delta_values:
+        Earr, Parr = compute_eigens(BZ, KK, Delta, B, D, +1 if apilamiento<=3 else -1, t1, t2, t3, t4)
+        mitad = 1
+        Uarr, Farr = compute_U_F(BZ, Parr, mitad)
+        Vv = 0.0
+        for i in range(NBZ):
+            for j in range(NBZ):
+                Vv += np.imag(Farr[i,j,0,0])
+        ChVv = Vv/(2*np.pi)
+        chern_val.append(ChVv)
 
-    # sumar curvaturas
-    Cv = 0.0; Vv = 0.0
-    for i in range(NBZ):
-        for j in range(NBZ):
-            Cv += np.imag(Farr[i,j,1,0])
-            Vv += np.imag(Farr[i,j,0,0])
-    ChCv = Cv/(2*np.pi)
-    ChVv = Vv/(2*np.pi)
+    Delta_vals_por_apilamiento.append(Delta_values*1000) # meV
+    chern_valencia_por_apilamiento.append(chern_val)
+    leyendas.append(stacking_str)
 
-    chern_convergence['conduction'].append(ChCv)
-    chern_convergence['valence'].append(ChVv)
-    print(f"Δ = {Delta*1000:6.2f} meV → Chern(C)={ChCv:.4f}, Chern(V)={ChVv:.4f}")
-
-# ---------------------------------------------------
-# GRAFICAR RESULTADOS
-# ---------------------------------------------------
-plt.figure(figsize=(10,6))
-plt.plot(Delta_values, chern_convergence['conduction'], 'o-', label='Conducción')
-plt.plot(Delta_values, chern_convergence['valence'],     's-', label='Valencia')
-plt.axhline(0, linestyle='--', alpha=0.3)
+# --------- GRAFICAR TODO -----------
+plt.figure(figsize=(12,7))
+colores = ['tab:red','tab:brown','tab:orange','tab:blue','tab:red','tab:brown']
+for i in range(6):
+    plt.plot(Delta_vals_por_apilamiento[i], chern_valencia_por_apilamiento[i],
+             marker='o', label=leyendas[i], color=colores[i])
+plt.axhline(0, linestyle='--', alpha=0.5, color='k')
 plt.axhline(1, linestyle='--', alpha=0.3)
 plt.axhline(-1, linestyle='--', alpha=0.3)
-plt.xlabel('Δ (eV)')
-plt.ylabel('Número de Chern')
-plt.legend(); plt.grid(alpha=0.3)
+plt.xlabel('Δ (meV)')
+plt.ylabel('Número de Chern (valencia)')
+plt.legend()
 plt.gca().yaxis.set_major_locator(MultipleLocator(1))
+plt.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig(f'stacking_{stacking}_{stacking_lower}^{stacking_upper}.png', dpi=300)
+plt.savefig('chern_vs_delta_apilamientos.png', dpi=300)
 plt.show()
