@@ -13,7 +13,7 @@ def Rot(th):
 
 @numba.njit
 def hamilton2x2(x, y, Delta, B, D, epsilon, t1, t2, t3, t4):
-    q_x, q_y = (x,y)
+    q_x, q_y = (x/a,y/a)
     q_plus, q_minus, qcuadrado= q_x + 1j * q_y, q_x - 1j * q_y, q_x**2 + q_y**2
     q_plus_epsilon, q_minus_epsilon = (q_plus, q_minus) if epsilon == +1 else (q_minus, q_plus)
     HH=np.zeros((2,2),dtype=np.complex128)
@@ -94,7 +94,7 @@ def compute_U_F(BZ, Parr, mitad):
 # Constantes fisicas
 img = complex(0.0,1.0)
 # Bicapa
-a = 1                   # (Å)
+a = 3.15                 # (Å)
 a_0 = a / np.sqrt(3)
 b = (4*np.pi)/(np.sqrt(3.0)*a)
 a1 = a*np.array([0.5*np.sqrt(3.0), 0.5])
@@ -107,20 +107,22 @@ Gamma = np.array([0.0,0.0],dtype=np.float64)-K_BZ
 KK    = (b/np.sqrt(3.0))*np.array([0.5*np.sqrt(3.0),-0.5],dtype=np.float64)-K_BZ
 KP    = (b/np.sqrt(3.0))*np.array([0.5*np.sqrt(3.0),0.5],dtype=np.float64)-K_BZ
 MM    = (b/2)*np.array([1,0],dtype=np.float64)-K_BZ
-L     = (np.pi/(5*a))*np.array([-1,-1],dtype=np.float64)
+Q_kp = np.pi / (5)
+L     = Q_kp*np.array([-1,-1],dtype=np.float64)
 OO    = KK + L
 
 epsilon = int(input("\nStacking:\n +1. R-stacking\n -1. H-stacking\n Ingrese el número de stacking: "))             
-v_u = 2.59        # MoS2: vel fermi upper [v_u=hbar.v_Fu] (eV.Å)
-M_u = 2.03              # masa upper (eV)
-v_l = 2.22        # WS2:  vel fermi lower [v_l=hbar.v_Fl] (eV.Å)
-M_l = 2.07              # masa lower (eV)
+v_u = 2.59       # WS2:  vel fermi upper [v_l=hbar.v_Fl] (eV.Å)
+M_u = 2.03            # masa upper (eV)   
+v_l = 2.22       # MoS2: vel fermi lower [v_u=hbar.v_Fu] (eV.Å)
+M_l = 2.07            # masa lower (eV)  
 Tplus0plus0  = 0.0067   # (eV)
 Tminus2plus0 = 0.0033   # (eV)
 Tplus0plus2  = 0.0033   # (eV)
 Tminus2plus2 = 0.0100   # (eV)
-B = (v_u**2/M_u) + (v_l**2/M_l)
-D = (v_u**2/M_u) - (v_l**2/M_l)
+Tplus2plus2 = 0.0100    # (eV)
+B = (v_l**2/M_l) + (v_u**2/M_u)
+D = (v_l**2/M_l) - (v_u**2/M_u)
 
                     
 # Canales t
@@ -152,9 +154,7 @@ t2 = (v_l / M_l) * t_vv
 t3 = -(v_u / M_u) * t_cc
 t4 = ((v_l * v_u) / (M_l * M_u)) * t_cv
 
-# Fronteras
-Q_kp = np.pi / (5 *a)
-Q_max = (2 * np.pi) / (3 * a)
+# Criterio de Delta
 if apilamiento == 1:
     t = t2+t3
     A_coeff = B
@@ -187,19 +187,20 @@ elif apilamiento == 6:
     C_coeff = B * t**2 * Q_kp**2
 # Soluciones de la cuadrática
 discriminante = B_coeff**2 - 4 * A_coeff * C_coeff
-
 if discriminante >= 0:
     delta1 = (-B_coeff + np.sqrt(discriminante)) / (2 * A_coeff)
     delta2 = (-B_coeff - np.sqrt(discriminante)) / (2 * A_coeff)
     soluciones = [delta1, delta2]
-    Delta_kp = min(delta1,delta2)
+    Delta_kp = min(delta1,delta2)/a**2
 
-# Parámetros          
-NBZ = 100
-f_delta = 0.50
-Delta = f_delta * Delta_kp
+# Solucion Delta          
+puntos = 3000
+f_delta = 0.5
+Delta = f_delta*Delta_kp
 Q = Q_kp
-kmin, kmax = -Q, Q  
+kmin, kmax = -Q, Q    
+
+NBZ = 50
 chern_convergence = {'conduction': [], 'valence': []}  
 
 
@@ -265,17 +266,17 @@ bar01 = ax[0, 1].tricontourf(kxarr, kyarr, np.imag(BCurvC), levels=100, cmap='Rd
 # Actualizar el texto con los números de Chern
 # Texto para los números de Chern
 chern_text = f.text(0.5, 0.01, "", ha='center', fontsize=10, bbox=dict(facecolor='beige', alpha=0.7))
-chern_text.set_text(f" Δ = {Delta:.2f} eV")
+chern_text.set_text(f" Δ = {Delta*1000:.2f} meV")
 # Titulos
 ax[0, 0].set_title("Real (Berry_CurvC)")
 ax[0, 1].set_title("Imaginary (Berry_CurvC)")
 ax[1, 0].set_title("Real (Berry_CurvV)")
 ax[1, 1].set_title("Imaginary (Berry_CurvV)")
 # Etiquetas
-ax[1, 0].set_xlabel(f"$ak_x$")
-ax[1, 1].set_xlabel(f"$ak_x$")
-ax[0, 0].set_ylabel(f"$ak_y$")
-ax[1, 0].set_ylabel(f"$ak_y$")
+ax[1, 0].set_xlabel(f"$aq_x$")
+ax[1, 1].set_xlabel(f"$aq_x$")
+ax[0, 0].set_ylabel(f"$aq_y$")
+ax[1, 0].set_ylabel(f"$aq_y$")
 # Colores
 f.colorbar(bar00, ax=ax[0, 0], shrink=0.8)
 f.colorbar(bar01, ax=ax[0, 1], shrink=0.8)
