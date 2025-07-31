@@ -9,7 +9,7 @@ def Rot(th):
     return RR
 
 # Bicapa
-a = 1                   # (Å)
+a = 3.15                 # (Å)
 a_0 = a / np.sqrt(3)
 b = (4*np.pi)/(np.sqrt(3.0)*a)
 a1 = a*np.array([0.5*np.sqrt(3.0), 0.5])
@@ -22,20 +22,22 @@ Gamma = np.array([0.0,0.0],dtype=np.float64)-K_BZ
 KK    = (b/np.sqrt(3.0))*np.array([0.5*np.sqrt(3.0),-0.5],dtype=np.float64)-K_BZ
 KP    = (b/np.sqrt(3.0))*np.array([0.5*np.sqrt(3.0),0.5],dtype=np.float64)-K_BZ
 MM    = (b/2)*np.array([1,0],dtype=np.float64)-K_BZ
-L     = (np.pi/(5*a))*np.array([-1,-1],dtype=np.float64)
+Q_kp = np.pi / (5)
+L     = Q_kp*np.array([-1,-1],dtype=np.float64)
 OO    = KK + L
-
+                                  
 epsilon = int(input("\nStacking:\n +1. R-stacking\n -1. H-stacking\n Ingrese el número de stacking: "))             
-v_u = 2.22        # MoS2: vel fermi upper [v_u=hbar.v_Fu] (eV.Å)
-M_u = 2.07              # masa upper (eV)
-v_l = 2.59        # WS2:  vel fermi lower [v_l=hbar.v_Fl] (eV.Å)
-M_l = 2.03              # masa lower (eV)
+v_u = 2.59       # WS2:  vel fermi upper [v_l=hbar.v_Fl] (eV.Å)
+M_u = 2.03            # masa upper (eV)   
+v_l = 2.22       # MoS2: vel fermi lower [v_u=hbar.v_Fu] (eV.Å)
+M_l = 2.07            # masa lower (eV)  
 Tplus0plus0  = 0.0067   # (eV)
 Tminus2plus0 = 0.0033   # (eV)
 Tplus0plus2  = 0.0033   # (eV)
 Tminus2plus2 = 0.0100   # (eV)
-B = (v_u**2/M_u) + (v_l**2/M_l)
-D = (v_u**2/M_u) - (v_l**2/M_l)
+Tplus2plus2 = 0.0100    # (eV)
+B = (v_l**2/M_l) + (v_u**2/M_u)
+D = (v_l**2/M_l) - (v_u**2/M_u)
 
 # Canales t
 def canales(epsilon):
@@ -66,9 +68,7 @@ t2 = (v_l / M_l) * t_vv
 t3 = -(v_u / M_u) * t_cc
 t4 = ((v_l * v_u) / (M_l * M_u)) * t_cv
 
-# Fronteras
-Q_kp = np.pi / (5 *a)
-Q_max = (2 * np.pi) / (3 * a)
+# Criterio de Delta
 if apilamiento == 1:
     t = t2+t3
     A_coeff = B
@@ -101,23 +101,22 @@ elif apilamiento == 6:
     C_coeff = B * t**2 * Q_kp**2
 # Soluciones de la cuadrática
 discriminante = B_coeff**2 - 4 * A_coeff * C_coeff
-
 if discriminante >= 0:
     delta1 = (-B_coeff + np.sqrt(discriminante)) / (2 * A_coeff)
     delta2 = (-B_coeff - np.sqrt(discriminante)) / (2 * A_coeff)
     soluciones = [delta1, delta2]
-    Delta_kp = min(delta1,delta2)
+    Delta_kp = min(delta1,delta2)/a**2
 
-# Parámetros          
-puntos = 1000
-f_delta = 0.50
-Delta = f_delta * Delta_kp
+# Solucion Delta          
+puntos = 3000
+f_delta = 0.5
+Delta = f_delta*Delta_kp
 Q = Q_kp
-kmin, kmax = -Q, Q  
+kmin, kmax = -Q, Q    
 
 # ---------------------------Calculos-----------------------------------
 def hamilton4x4(x,y):
-    q_x, q_y = (x, y)
+    q_x, q_y = (x/a, y/a)
     HH=np.zeros((4,4),dtype=np.complex128)
     HH[0,0] = -0.5*Delta+M_u
     HH[0,1] = v_u*(q_x+1j*q_y)
@@ -144,7 +143,6 @@ kx_values = np.linspace(factor*kmin, factor*kmax, puntos)
 line_colors = ['b', 'r', 'b', 'r']  # Colores para las bandas
 lines = [ax.plot([], [], color=color, marker='.',markersize=1)[0] for color in line_colors]
 ax.set_xlim(kmin, kmax)
-ax.set_ylim(-1.6*M_l, 1.6*M_u)
 ax.set_xlabel('$aq_x$')
 ax.set_ylabel('Energía (eV)')
 ax.axhline(0, color='black', marker='.', linestyle='None', linewidth=0.7)
@@ -156,9 +154,10 @@ for kx in kx_values:
     energies = np.linalg.eigvalsh(HH)
     energy_bands.append(energies)
 energy_bands = np.array(energy_bands)
+ax.set_ylim(np.min(energy_bands)*1.2, np.max(energy_bands)*1.2)
 for band, line in enumerate(lines):
     line.set_data(kx_values, energy_bands[:, band])
-title.set_text(f'Espectro de Energías (Δ = {Delta:.2f} eV)')  # Actualizar título dinámicamente
+title.set_text(f'Espectro de Energías (Δ = {Delta*1000:.2f} meV)')  # Actualizar título dinámicamente
 
 # Calcular diferencias entre bandas consecutivas
 diferencias = np.diff(energy_bands, axis=1)  # (N_kx, N_bandas - 1)
