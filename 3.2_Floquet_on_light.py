@@ -16,7 +16,7 @@ cte = (e/(2*h_bar))**2
 img = complex(0.0,1.0)
 
 # Bicapa
-a = 1                   # (Å)
+a = 3.15                  # (Å)
 a_0 = a / np.sqrt(3)
 b = (4*np.pi)/(np.sqrt(3.0)*a)
 a1 = a*np.array([0.5*np.sqrt(3.0), 0.5])
@@ -29,18 +29,24 @@ Gamma = np.array([0.0,0.0],dtype=np.float64)-K_BZ
 KK    = (b/np.sqrt(3.0))*np.array([0.5*np.sqrt(3.0),-0.5],dtype=np.float64)-K_BZ
 KP    = (b/np.sqrt(3.0))*np.array([0.5*np.sqrt(3.0),0.5],dtype=np.float64)-K_BZ
 MM    = (b/2)*np.array([1,0],dtype=np.float64)-K_BZ
-L     = (np.pi/(5*a))*np.array([-1,-1],dtype=np.float64)
+Q_kp = 3*np.pi/5
+L     = Q_kp*np.array([-1,-1],dtype=np.float64)
 OO    = KK + L
 
-gamma2 = 2.22        # MoS2: vel fermi upper [v_u=hbar.v_Fu] (eV.Å)
-epsilon2 = 2.07              # masa upper (eV)
-gamma1 = 2.59        # WS2:  vel fermi lower [v_l=hbar.v_Fl] (eV.Å)
-epsilon1 = 2.03              # masa lower (eV)                    
+gamma1 = 2.59       # WS2:  vel fermi upper [v_l=hbar.v_Fl] (eV.Å)
+epsilon1 = 2.03            # masa upper (eV)   
+gamma2 = 2.22       # MoS2: vel fermi lower [v_u=hbar.v_Fu] (eV.Å)
+epsilon2 = 2.07            # masa lower (eV)                 
 epsilon0 = 0
 Tplus0plus0  = 0.0067   # (eV)
 Tminus2plus0 = 0.0033   # (eV)
 Tplus0plus2  = 0.0033   # (eV)
 Tminus2plus2 = 0.0100   # (eV)
+
+t_cc = 3*Tplus0plus0
+t_vv = 3*Tminus2plus2
+t_cv = 3*Tplus0plus2
+t_vc = 3*Tminus2plus0
 m_plus = h_bar**2 / (np.abs(gamma2)**2 / epsilon2 + np.abs(gamma1)**2 / epsilon1)
 m_minus = h_bar**2 / (np.abs(gamma2)**2 / epsilon2 - np.abs(gamma1)**2 / epsilon1)                                        
 alpha_plus = h_bar**2 / (2 * m_plus)
@@ -49,34 +55,21 @@ mu_plus = alpha_minus + alpha_plus
 mu_minus = alpha_minus - alpha_plus
 u = e / h_bar
 
-
-# Canales t
-def canales(varphi,Delta,config):
-    if varphi == +1:
-        stacking = "R"
-        if config == 1:
-            t_cc = 3*Tplus0plus0
-            t_vv = 3*Tminus2plus2
-            return [0, 0, 0.5*(-np.conj(t_cc)*gamma1*(Delta-2*epsilon1)/(epsilon1*(Delta-epsilon1))+np.conj(t_vv)*gamma2*(Delta-2*epsilon2)/(epsilon2*(Delta-epsilon2))), 0, 0], 1
-        elif config == 2:
-            t_vc = 3*Tminus2plus0
-            return [np.conj(t_vc), 0, 0,(np.conj(t_vc)/2)*(abs(gamma2)**2/(epsilon2**2)+ abs(gamma1)**2 / (epsilon1**2)), 0], 2
-        elif config== 3:
-            t_cv = 3*Tplus0plus2
-            return [0, 0, 0, 0, (gamma1*gamma2*np.conj(t_cv)/2)*((Delta * (epsilon1 + epsilon2) - 2 * epsilon1 * epsilon2)/(epsilon1 * epsilon2 * (Delta - epsilon1) * (Delta - epsilon2)))], 3
-    elif varphi == -1:
-        stacking = "H"
-        if config == 1:
-            t_vv = 3*Tminus2plus2          
-            return [0, 0.5*gamma2*np.conj(t_vv)*(Delta-2*epsilon2)/(epsilon2*(Delta-epsilon2)), 0, 0, 0], 4
-        elif config == 2:    
-            t_cc = 3*Tplus0plus0         
-            return [0, 0, -0.5*gamma1*np.conj(t_cc)*(Delta-2*epsilon1)/(epsilon1*(Delta-epsilon1)), 0, 0], 5      
-        elif config == 3:
-            t_cv = 3*Tplus0plus2
-            t_vc = 3*Tminus2plus0
-            return [np.conj(t_vc), 0, 0, gamma1*gamma2*np.conj(t_cv)/(epsilon1*epsilon2), 0], 6 
-
+def canales(varphi, Delta, config):
+    # Predefinición de los canales para cada caso, con formato [t_0, gamma_plus, gamma_minus, gamma_I, gamma_II]
+    canales_dict = {
+        (+1, 1): ([0, 0, gamma_minus, 0, 0], 1),
+        (+1, 2): ([t_0, 0, 0, gamma_I, 0], 2),
+        (+1, 3): ([0, 0, 0, 0, gamma_II], 3),
+        (-1, 1): ([0, gamma_plus, 0, 0, 0], 4),
+        (-1, 2): ([0, 0, gamma_minus, 0, 0], 5),
+        (-1, 3): ([t_0, 0, 0, gamma_I, gamma_II], 6)
+    }
+    # Retorna la tupla correspondiente o lanza error si la combinación es inválida
+    try:
+        return canales_dict[(varphi, config)]
+    except KeyError:
+        raise ValueError(f"Combinación no válida: varphi={varphi}, config={config}")
 
 def BZ_TB(N):
     vx = np.array([-2*L[0], 0]) / N
@@ -87,7 +80,6 @@ def BZ_TB(N):
             BZ[jx, jy, :] = OO + vx * jx + vy * jy
     return BZ
 
-
 # BZ discreta
 def imagen(hw):
     # ---------------------------------------------------
@@ -95,6 +87,8 @@ def imagen(hw):
     A0 = alfa * h_bar/(a*e)
     # Hamiltoniano de Floquet
     def hamiltonian(x,y,hw,Delta,A0,eta):
+        x=x/a
+        y=y/a
         q_plus, q_minus = x+img*y, x-img*y
         q_plus_eta, q_minus_eta = x+eta*img*y, x-eta*img*y
         q2 = x**2 + y**2
@@ -102,26 +96,33 @@ def imagen(hw):
         epsilon_q = epsilon0 + (h_bar**2 * q2) / (2 * m_minus)
         Delta_q_medium = 0.5*Delta + (h_bar**2 * q2) / (2 * m_plus)
         t_q = t0 + gamma_plus*q_plus + gamma_minus*q_minus + gamma_I*q2 + gamma_II*q_minus**2 
-        factor = (u * A0) / (2*img)
+        
         # matriz hk
         hk = np.array([[epsilon_q+Delta_q_medium, t_q], [np.conj(t_q), epsilon_q-Delta_q_medium]], dtype=np.complex128)
         
         # H2,H1 and H0
-        H011 = -4 * (factor**2) * mu_plus
-        H022 = -4 * (factor**2) * mu_minus
-        H012 = -4 * (factor**2) * (gamma_I + gamma_II)
+        H011 = u**2 * A0**2 * mu_plus
+        H022 = u**2 * A0**2 * mu_minus
+        H012 = u**2 * A0**2 * (gamma_I + gamma_II)
         H021 = np.conj(H012)
-        H0 = hk + np.array([[H011, H012],[H021, H022]], dtype=np.complex128)
+        H0 = hk  + np.array([[H011, H012],[H021, H022]], dtype=np.complex128)
 
-        H111 = factor * 2 * mu_plus * q_minus_eta
-        H122 = factor * 2 * mu_minus * q_minus_eta
-        H112 = factor * (gamma_plus * z + gamma_minus * np.conj(z) + gamma_I * 2 * q_minus_eta + gamma_II * q_minus * np.conj(z))
+        H111 = ((u * A0)/(2*img)) * 2 * mu_plus * q_minus_eta
+        H122 = ((u * A0)/(2*img)) * 2 * mu_minus * q_minus_eta
+        H112 = ((u * A0)/(2*img)) * (-(gamma_plus * z + gamma_minus * np.conj(z) + gamma_I * 2 * q_minus_eta + gamma_II * q_minus * np.conj(z)))
         H121 = np.conj(H112)
         H1 = np.array([[H111, H112],[H121, H122]], dtype=np.complex128)
 
+        H211 = 0
+        H222 = 0
+        H212 = -((u**2 * A0**2)/(2*img))* gamma_II * eta
+        H221 = np.conj(H212)
+        H2 = np.array([[H211, H212],[H221, H222]], dtype=np.complex128)
 
         H_plus_1 = H1
         H_minus_1= np.conjugate(np.transpose(H_plus_1))
+        H_plus_2 = H2
+        H_minus_2= np.conjugate(np.transpose(H_plus_2))
 
         Basis = np.arange(-Nbasis, Nbasis + 1, dtype=np.int32)
         HF = np.zeros((2 * Basis.size, 2 * Basis.size), dtype=np.complex128)
@@ -130,6 +131,9 @@ def imagen(hw):
         for ii in range(Basis.size - 1):
             HF[2*ii:2*ii+2, 2*(ii+1):2*(ii+1)+2] = H_minus_1  # H_{-1}
             HF[2*(ii+1):2*(ii+1)+2, 2*ii:2*ii+2] = H_plus_1   # H_{1}
+        for ii in range(Basis.size - 2):
+            HF[2*ii:2*ii+2, 2*(ii+2):2*(ii+2)+2] = H_minus_2  # H_{-2}
+            HF[2*(ii+2):2*(ii+2)+2, 2*ii:2*ii+2] = H_plus_2   # H_{2}
 
         return HF
 
@@ -138,41 +142,46 @@ def imagen(hw):
         Uarr = np.empty((N, N, 2, 2, mitad), np.complex128)
         Farr = np.empty((N, N, 2, mitad), np.complex128)
 
+            # separar eigenestados
         for i in prange(N):
             for j in range(N):
-                ip = (i+1) % N
-                jp = (j+1) % N
+                pass  # Parr ya contiene v[:,band] en último eje
+
+        # Calcular Uarr
+        for i in prange(N):
+            for j in range(N):
                 for band in range(mitad):
+                    # índices vecinos
+                    ip = (i+1) % N
+                    jp = (j+1) % N
+
+                    # valence y conduction en bandas 0 y 1
                     for b in range(2):
-                        a = Parr[i,j,:, b*mitad + band]
-                        bvec = Parr[ip,j,:, b*mitad + band]
+                        # avance en kx
+                        a = Parr[i,j,:,b*mitad+band]
+                        bvec = Parr[ip,j,:,b*mitad+band]
                         dum = np.vdot(a, bvec)
                         Uarr[i,j,0,b,band] = dum/abs(dum) if abs(dum)!=0 else 0
-                        
-                        cvec = Parr[i,jp,:, b*mitad + band]
+                        # avance en ky
+                        cvec = Parr[i,jp,:,b*mitad+band]
                         dum = np.vdot(a, cvec)
                         Uarr[i,j,1,b,band] = dum/abs(dum) if abs(dum)!=0 else 0
 
+        # Calcular Farr
         for i in prange(N):
             for j in range(N):
-                ip = (i+1)%N 
-                jp = (j+1)%N
+                ip = (i+1)%N; jp = (j+1)%N
                 for b in range(2):
                     for band in range(mitad):
                         num = Uarr[i,j,0,b,band] * Uarr[ip,j,1,b,band]
                         den = Uarr[i,jp,0,b,band] * Uarr[i,j,1,b,band]
-                        Farr[i,j,b,band] = np.log(num/den) if abs(den) > 1e-12 and abs(num) > 1e-12 else 0
-
-                        
+                        Farr[i,j,b,band] = np.log(num/den) if abs(den)!=0 else 0
         return Uarr, Farr
-
-                 
 
     # Función para obtener eigenvalores y vectores
     get_eig = lambda kx, ky: np.linalg.eigh(hamiltonian(kx, ky, hw, Delta, A0, eta))
     eigG, vecG = get_eig(0, 0)
     idx = np.argsort(eigG)
-
 
     if Nbasis == 1:
         idx_v0, idx_vp1, idx_cm1, idx_c0 = idx[1], idx[2], idx[3], idx[4]
@@ -195,6 +204,7 @@ def imagen(hw):
 
     # Línea central en la dirección k_y
     iy = NBZ // 2
+    #kx_arr = np.linspace(-np.pi/5,np.pi/5,1000)
     kx_arr = BZ[:, iy, 0]
     # Espectro para bandas seleccionadas
     if Nbasis == 1:
@@ -213,11 +223,12 @@ def imagen(hw):
         ax.plot(kx_arr, y, label=band, color='blue')
 
     ax.set_title(f"ℏω = {hw:.2f} eV\nChern: {chern_str}", fontsize=16, fontweight='bold')
+    #ax.set_title(f"Chern: {chern_str}", fontsize=16, fontweight='bold')
     ax.set_xlabel('$aq_x$',fontsize=18)
     ax.tick_params(axis='both', labelsize=14)
     ax.set_ylabel('Energía (eV)',fontsize=18)
     plt.tight_layout()
-    plt.savefig(f"band_structure_apilamiento_{apilamiento}_hw_{hw:.3f}.png")
+    plt.savefig(f"3.{apilamiento}1.png")
     plt.show()
     plt.close()
 
@@ -242,19 +253,17 @@ def imagen(hw):
 
     # Título global
     fig.suptitle(f'ℏω = {hw:.2f} eV\nChern: {chern_str}', fontsize=20, fontweight='bold')
+    #fig.suptitle(f'Chern: {chern_str}', fontsize=20, fontweight='bold')
     plt.tight_layout(rect=[0, 0, 1, 1])
-    plt.savefig(f"berry_curvature_apilamiento_{apilamiento}_hw_{hw:.3f}.png")
+    plt.savefig(f"3.{apilamiento}2.png")
     plt.show()
     plt.close()
 
-# Fronteras
-    Q_kp = np.pi / (5 *a)
-    Q_max = (2 * np.pi) / (3 * a)
 
 
 # --------------------- Parámetros ------------------
 # Discretizacion de BZ
-NBZ = 500       
+NBZ = 500      
 # Tamaño de matriz de Floquet
 Nbasis = 1
 # Verifica Nbasis y define bandas según su valor
@@ -265,38 +274,37 @@ elif Nbasis == 0:
 else:
     raise ValueError("Nbasis debe ser 0 o 1")
 # Gap entre cond_lower y val_upper (eV)
-Delta_g = 1.45    
+Delta_g = 1.45   
 # Polarizacion (1:right, -1:left)
 eta = 1
 # Campo electrico E_0
 d = 6.516
-E_0 = 0.01 # V/A 
+E_0 = 0.01 # V/A
 U = E_0 * d
 Delta = Delta_g - U    
+# ---------------------------------------------------  
+t_0 = np.conjugate(t_vc)
+gamma_plus = 0.5 * (gamma2 * np.conjugate(t_vv) * (Delta - 2 * epsilon2)) / (epsilon2 * (Delta - epsilon2))
+gamma_minus = -0.5 * (gamma1 * np.conjugate(t_cc) * (Delta - 2 * epsilon1)) / (epsilon1 * (Delta - epsilon1))
+gamma_I = 0.5 * np.conjugate(t_vc) * (
+    (np.abs(gamma2)**2) / (epsilon2 * (Delta - epsilon2)) +
+    (np.abs(gamma1)**2) / (epsilon1 * (Delta - epsilon1))
+)
+gamma_II = (gamma1 * gamma2 * np.conjugate(t_cv) * (Delta * (epsilon1 + epsilon2) - 2 * epsilon1 * epsilon2)) / (
+    2 * epsilon1 * epsilon2 * (Delta - epsilon1) * (Delta - epsilon2)
+)
 # ---------------------------------------------------  
 BZ = BZ_TB(NBZ)  
 size_F = 2 * (2 * Nbasis + 1)
 half   = size_F // 2  # número de bandas de valencia/conducción   
 
-varphi = 1
-config = 1
-
-hw_values = np.linspace(0.5, 3.5, 200)
-
-# Contador total
-total = len(hw_values)
-count = 0
+varphi = -1
+config = 3
 
 canal, apilamiento = canales(varphi, Delta, config)[0], canales(varphi, Delta, config)[1]
 t0, gamma_plus, gamma_minus, gamma_I, gamma_II = canal
 
-# ------------------ Iteración ------------------
-#for hw in hw_values:
-#    count += 1
-#    avance = 100 * count / total
-#    print(f"apilamiento = {apilamiento}, ℏω = {hw:.2f} eV, avance total = {avance:.2f}%")
-#    imagen(hw)
-# -----------------------------------------------
-
-hw = 0.8
+hw = 1.6
 imagen(hw)
+
+
